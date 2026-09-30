@@ -7,10 +7,10 @@ import java.util.Optional;
  * A participant in a simulation: something with an identity that holds things, can be asked what
  * it is able to do, and is observable from outside.
  *
- * <p>Deliberately thin. An agent is not a facility, owns no material, and has no lifecycle — a
- * market, an owner and a government are agents on exactly the same terms as a production plant,
- * and a substrate that assumed otherwise would fit one of those and fail the rest. What an agent
- * <em>is</em> is the small set of things all of them share.
+ * <p>Deliberately thin. An agent holds no quantity of anything and has no lifecycle. One that
+ * coordinates others, one that merely oversees them, and one that does the work of the model are
+ * agents on exactly the same terms — a substrate that assumed any particular shape would fit one
+ * kind and fail the rest. What an agent <em>is</em> is the small set of things all of them share.
  *
  * <p>An interface rather than a base class, with {@link AbstractAgent} supplying the plumbing —
  * mirroring {@code ProcessStage}/{@code AbstractProcessStage} in {@code foundation}. That split
@@ -23,12 +23,12 @@ public interface Agent {
 
     /**
      * This agent's instance name, unique within the population that minted it and formed from that
-     * population's name plus an ordinal — {@code sfr_fleet-1}.
+     * population's name plus an ordinal — {@code unit_group-1}.
      */
     String getName();
 
     /**
-     * The name of the kind of agent this is — {@code "SFR"} — as distinct from its Java class and
+     * The name of the kind of agent this is — {@code "alpha"} — as distinct from its Java class and
      * from its instance name. Several types commonly share one class, so the class alone does not
      * identify what a model means by a type.
      */
@@ -52,7 +52,7 @@ public interface Agent {
 
     /**
      * Observes everything the agent's held Blocks emit, re-attributed to the agent, so watching a
-     * whole facility is one registration rather than one per Block. Registration lives on the
+     * whole agent is one registration rather than one per Block. Registration lives on the
      * agent rather than on a shared bus, matching how {@code ProcessStage} and Repast's own
      * {@code Context} both do it.
      */

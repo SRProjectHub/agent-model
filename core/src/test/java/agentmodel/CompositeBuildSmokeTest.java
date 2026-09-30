@@ -42,15 +42,15 @@ class CompositeBuildSmokeTest {
 
     @Test
     void resourcePoolIsSharedAcrossAllThreeLibrariesRatherThanReimplemented() {
-        ResourcePool crane = new ResourcePool("crane", 2, () -> 0.0);
+        ResourcePool pool = new ResourcePool("pool", 2, () -> 0.0);
         Object holder = new Object();
 
-        assertTrue(crane.tryAcquire(holder, 2));
-        assertEquals(0, crane.available());
-        assertSame(2, crane.currentHolders().get(holder));
+        assertTrue(pool.tryAcquire(holder, 2));
+        assertEquals(0, pool.available());
+        assertSame(2, pool.currentHolders().get(holder));
 
-        crane.release(holder, 2);
-        assertTrue(crane.isIdle());
+        pool.release(holder, 2);
+        assertTrue(pool.isIdle());
     }
 
     @Test

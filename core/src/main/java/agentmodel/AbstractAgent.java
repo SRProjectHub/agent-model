@@ -160,8 +160,8 @@ public abstract class AbstractAgent implements Agent {
      * reference with observation attached; containing an agent is structural — exclusive, mutual,
      * and the thing that defines where an agent lives.
      *
-     * <p>Forwarded events keep their <em>original</em> attribution: a listener on an owner is told
-     * which facility's Block emitted, not merely that something under the owner did.
+     * <p>Forwarded events keep their <em>original</em> attribution: a listener high in the tree is
+     * told which agent's Block emitted, not merely that something beneath it did.
      *
      * @throws IllegalStateException if the child is already contained, or if containing it would
      *     make a cycle
@@ -265,8 +265,8 @@ public abstract class AbstractAgent implements Agent {
      * <p>Distinct from {@link #release} followed by {@link #contain}, and that distinction is the
      * whole point: changing an agent's container takes it out of a Repast context, which drops it
      * from every relation declared on that context or above it. For a departure that is right. For a
-     * transfer — a plant changing hands, a facility reassigned — arriving with no relations at all
-     * would be wrong, so they are saved across the move and put back.
+     * reassignment, arriving with none of its relations would be wrong, so they are saved across the
+     * move and put back.
      *
      * @throws IllegalStateException if the agent is not contained anywhere to begin with
      */

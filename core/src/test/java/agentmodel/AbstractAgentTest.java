@@ -63,18 +63,18 @@ class AbstractAgentTest {
 
     @Test
     void aHeldBlocksEventsReachTheAgentsListenerAttributedToTheAgent() {
-        TestAgent facility = agent("facility");
+        TestAgent unit = agent("unit");
         FakeStage<String> queue = new FakeStage<>("queue");
-        facility.hold(queue);
+        unit.hold(queue);
 
         Recorder recorder = new Recorder();
-        facility.addAgentListener(recorder);
+        unit.addAgentListener(recorder);
 
-        queue.emitEntered("cask-1", 3.0);
-        queue.emitExited("cask-1", 7.0);
+        queue.emitEntered("item-1", 3.0);
+        queue.emitExited("item-1", 7.0);
 
         assertEquals(
-                Arrays.asList("entered facility/queue/cask-1@3.0", "exited facility/queue/cask-1@7.0"),
+                Arrays.asList("entered unit/queue/item-1@3.0", "exited unit/queue/item-1@7.0"),
                 recorder.seen);
     }
 
@@ -82,47 +82,47 @@ class AbstractAgentTest {
     void resourceEventsComeThroughTheSameRegistration() {
         // ProcessListener extends BlockObserver, so holding a Block picks up its resource events
         // too — no second registration, and the pool is not held by anyone.
-        TestAgent facility = agent("facility");
+        TestAgent unit = agent("unit");
         FakeStage<String> activity = new FakeStage<>("activity");
-        facility.hold(activity);
+        unit.hold(activity);
 
         Recorder recorder = new Recorder();
-        facility.addAgentListener(recorder);
+        unit.addAgentListener(recorder);
 
-        ResourcePool crane = new ResourcePool("crane", 2, () -> 0.0);
-        activity.emitResourceAcquired(crane, new Object(), 2, 1.0);
-        activity.emitResourceReleased(crane, new Object(), 2, 4.0);
+        ResourcePool pool = new ResourcePool("pool", 2, () -> 0.0);
+        activity.emitResourceAcquired(pool, new Object(), 2, 1.0);
+        activity.emitResourceReleased(pool, new Object(), 2, 4.0);
 
-        assertEquals(Arrays.asList("acquired facility/crane/2", "released facility/crane/2"), recorder.seen);
+        assertEquals(Arrays.asList("acquired unit/pool/2", "released unit/pool/2"), recorder.seen);
     }
 
     @Test
     void oneAgentHoldsBlocksOverDifferentEntityTypes() {
-        TestAgent facility = agent("facility");
-        FakeStage<String> casks = new FakeStage<>("casks");
-        FakeStage<Integer> batches = new FakeStage<>("batches");
-        facility.hold(casks);
-        facility.hold(batches);
+        TestAgent unit = agent("unit");
+        FakeStage<String> stageA = new FakeStage<>("stage-a");
+        FakeStage<Integer> stageB = new FakeStage<>("stage-b");
+        unit.hold(stageA);
+        unit.hold(stageB);
 
         Recorder recorder = new Recorder();
-        facility.addAgentListener(recorder);
+        unit.addAgentListener(recorder);
 
-        casks.emitEntered("cask-1", 1.0);
-        batches.emitEntered(42, 2.0);
+        stageA.emitEntered("item-1", 1.0);
+        stageB.emitEntered(42, 2.0);
 
         assertEquals(
-                Arrays.asList("entered facility/casks/cask-1@1.0", "entered facility/batches/42@2.0"),
+                Arrays.asList("entered unit/stage-a/item-1@1.0", "entered unit/stage-b/42@2.0"),
                 recorder.seen);
-        assertEquals(2, facility.heldBlocks().size());
+        assertEquals(2, unit.heldBlocks().size());
     }
 
     @Test
     void holdingTheSameBlockTwiceIsRefusedRatherThanDoubleReporting() {
-        TestAgent facility = agent("facility");
+        TestAgent unit = agent("unit");
         FakeStage<String> queue = new FakeStage<>("queue");
-        facility.hold(queue);
+        unit.hold(queue);
 
-        IllegalStateException thrown = assertThrows(IllegalStateException.class, () -> facility.hold(queue));
+        IllegalStateException thrown = assertThrows(IllegalStateException.class, () -> unit.hold(queue));
         assertTrue(thrown.getMessage().contains("queue"));
         assertEquals(1, queue.listenerCount(), "the refused hold must not have installed a second listener");
     }
@@ -150,20 +150,20 @@ class AbstractAgentTest {
 
     @Test
     void detachingRemovesTheRegistrationItselfNotJustTheReporting() {
-        TestAgent facility = agent("facility");
+        TestAgent unit = agent("unit");
         FakeStage<String> queue = new FakeStage<>("queue");
-        facility.hold(queue);
+        unit.hold(queue);
         assertEquals(1, queue.listenerCount());
 
         Recorder recorder = new Recorder();
-        facility.addAgentListener(recorder);
+        unit.addAgentListener(recorder);
 
-        facility.detachHeld();
+        unit.detachHeld();
 
         // The direct assertion: the listener is gone from the Block, so a departed agent cannot
         // keep reporting. Checking only that no events arrive would pass even if emit broke.
         assertEquals(0, queue.listenerCount());
-        assertTrue(facility.heldBlocks().isEmpty());
+        assertTrue(unit.heldBlocks().isEmpty());
 
         queue.emitEntered("after-departure", 9.0);
         assertTrue(recorder.seen.isEmpty());
@@ -171,72 +171,72 @@ class AbstractAgentTest {
 
     @Test
     void detachingIsIdempotent() {
-        TestAgent facility = agent("facility");
-        facility.hold(new FakeStage<String>("queue"));
-        facility.detachHeld();
-        facility.detachHeld();
-        assertTrue(facility.heldBlocks().isEmpty());
+        TestAgent unit = agent("unit");
+        unit.hold(new FakeStage<String>("queue"));
+        unit.detachHeld();
+        unit.detachHeld();
+        assertTrue(unit.heldBlocks().isEmpty());
     }
 
     // -- capabilities ----------------------------------------------------------------------
 
-    interface Bidder {
-        double quote();
+    interface Reporter {
+        double report();
     }
 
-    interface Regulator {
+    interface Tagged {
     }
 
     @Test
     void aHeldCapabilityIsReachableUnderTheTypeItWasHeldAs() {
-        TestAgent facility = agent("facility");
-        Bidder bidder = () -> 42.0;
-        facility.hold(Bidder.class, bidder);
+        TestAgent unit = agent("unit");
+        Reporter reporter = () -> 42.0;
+        unit.hold(Reporter.class, reporter);
 
-        Optional<Bidder> found = facility.view(Bidder.class);
+        Optional<Reporter> found = unit.view(Reporter.class);
         assertTrue(found.isPresent());
-        assertSame(bidder, found.get());
-        assertEquals(42.0, found.get().quote(), 1e-9);
+        assertSame(reporter, found.get());
+        assertEquals(42.0, found.get().report(), 1e-9);
     }
 
     @Test
     void askingForACapabilityAnAgentDoesNotHoldIsEmptyRatherThanAnError() {
-        // The normal way to ask "can you do this?" — a market polling for bidders should not have
+        // The normal way to ask "can you do this?" — an agent polling others for a capability should not have
         // to catch anything, which is the failure mode of a stringly-typed parameter map.
-        assertFalse(agent("government").view(Bidder.class).isPresent());
+        assertFalse(agent("plain").view(Reporter.class).isPresent());
     }
 
     @Test
     void holdingTwoCapabilitiesUnderOneTypeIsRefused() {
-        TestAgent facility = agent("facility");
-        facility.hold(Bidder.class, () -> 1.0);
+        TestAgent unit = agent("unit");
+        unit.hold(Reporter.class, () -> 1.0);
 
         IllegalStateException thrown =
-                assertThrows(IllegalStateException.class, () -> facility.hold(Bidder.class, () -> 2.0));
-        assertTrue(thrown.getMessage().contains("Bidder"));
-        assertEquals(1.0, facility.view(Bidder.class).get().quote(), 1e-9, "the first hold still stands");
+                assertThrows(IllegalStateException.class, () -> unit.hold(Reporter.class, () -> 2.0));
+        assertTrue(thrown.getMessage().contains("Reporter"));
+        assertEquals(1.0, unit.view(Reporter.class).get().report(), 1e-9, "the first hold still stands");
     }
 
     @Test
     void oneAgentHoldsSeveralCapabilitiesIndependently() {
-        TestAgent owner = agent("owner");
-        Bidder bidder = () -> 7.0;
-        Regulator regulator = new Regulator() {
+        TestAgent group = agent("group");
+        Reporter reporter = () -> 7.0;
+        Tagged tagged = new Tagged() {
         };
-        owner.hold(Bidder.class, bidder);
-        owner.hold(Regulator.class, regulator);
+        group.hold(Reporter.class, reporter);
+        group.hold(Tagged.class, tagged);
 
-        assertSame(bidder, owner.view(Bidder.class).get());
-        assertSame(regulator, owner.view(Regulator.class).get());
+        assertSame(reporter, group.view(Reporter.class).get());
+        assertSame(tagged, group.view(Tagged.class).get());
     }
 
     @Test
     void aCapabilityMustActuallyBeOfTheTypeItIsHeldAs() {
-        TestAgent facility = agent("facility");
+        TestAgent unit = agent("unit");
         // Reachable only by defeating generics, which a model mixing raw types can do by accident.
         @SuppressWarnings({"unchecked", "rawtypes"})
-        Class raw = Bidder.class;
-        assertThrows(IllegalArgumentException.class, () -> facility.hold(raw, "not a bidder"));
+        Class raw = Reporter.class;
+        assertThrows(IllegalArgumentException.class, () -> unit.hold(raw, "not a reporter"));
     }
 
     // -- construction and clock ------------------------------------------------------------
@@ -257,8 +257,8 @@ class AbstractAgentTest {
 
     @Test
     void heldBlocksIsNotAWayToMutateWhatTheAgentHolds() {
-        TestAgent facility = agent("facility");
-        facility.hold(new FakeStage<String>("queue"));
-        assertThrows(UnsupportedOperationException.class, () -> facility.heldBlocks().clear());
+        TestAgent unit = agent("unit");
+        unit.hold(new FakeStage<String>("queue"));
+        assertThrows(UnsupportedOperationException.class, () -> unit.heldBlocks().clear());
     }
 }

@@ -13,15 +13,15 @@ import repast.simphony.space.graph.RepastEdge;
 import repast.simphony.space.graph.UndirectedJungNetwork;
 
 /**
- * One named relation among agents — {@code supplies}, {@code participatesIn}, {@code regulates} —
- * with its direction, how many connections an agent may have over it, and the type of message it
- * carries all fixed when it is declared.
+ * One named relation among agents — {@code dependsOn}, {@code pairedWith}, {@code oversees} — with
+ * its direction, how many connections an agent may have over it, and the type of message it carries
+ * all fixed when it is declared.
  *
- * <p>Relations are plural and independent. Containment (§ {@link AbstractAgent#contain}) is a
- * separate thing entirely: an owner contains its facilities but does not supply them, a government
- * regulates a market it does not own, and a facility supplies another it has no authority over.
- * Collapsing those into one graph is what makes a substrate fit a material-flow model and fail
- * everything else, so each is its own network over the same agents.
+ * <p>Relations are plural and independent. Containment ({@link AbstractAgent#contain}) is a separate
+ * thing entirely: a container holds its members without depending on them, an overseer may watch a
+ * group it does not contain, and two agents may depend on each other while sharing no container.
+ * Collapsing those into one graph is what limits a substrate to whichever relation it chose, so each
+ * is its own network over the same agents.
  *
  * <p>A relation is also the <b>channel</b>. Declaring it fixes the message type that travels along
  * it, so who-may-talk-to-whom and what-they-may-say are one decision rather than two. Delivery

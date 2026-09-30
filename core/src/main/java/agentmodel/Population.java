@@ -10,8 +10,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import repast.simphony.util.collections.IndexedIterable;
 
 /**
- * A named, typed group of agents held by one container — a fleet of reactors, the plants one owner
- * operates, the participants in a market.
+ * A named, typed group of agents held by one container — the units one container operates, or the
+ * members taking part in something.
  *
  * <p>Each population owns its own Repast context, nested inside its container's. That is what lets
  * one container hold several populations, including two of the same class, and lets a display or
@@ -19,11 +19,11 @@ import repast.simphony.util.collections.IndexedIterable;
  * lives in that context and nowhere else, so there is no second structure to fall out of step.
  *
  * <p>The container is still the agent that <em>contains</em> the members: a population subdivides
- * what one agent holds rather than owning anything itself, so a member's container is the owner and
+ * what one agent holds rather than standing on its own, so a member's container is that agent and
  * events still forward up through it.
  *
  * <p>Populations mint their members' names. An instance name is the population's name plus an
- * ordinal — {@code sfr_fleet-1}, {@code sfr_fleet-2} — which is the third part of an agent's
+ * ordinal — {@code unit_group-1}, {@code unit_group-2} — which is the third part of an agent's
  * identity alongside its Java class and its {@link Agent#typeName() type name}.
  */
 public final class Population<A extends Agent> implements Iterable<A> {
@@ -53,7 +53,7 @@ public final class Population<A extends Agent> implements Iterable<A> {
         return type;
     }
 
-    /** The agent whose population this is. */
+    /** The agent this population belongs to. */
     public Agent container() {
         return container;
     }
@@ -67,8 +67,8 @@ public final class Population<A extends Agent> implements Iterable<A> {
     }
 
     /**
-     * The next instance name in this population's sequence — {@code sfr_fleet-1} then
-     * {@code sfr_fleet-2}. Ordinals are never reused, so a name identifies one agent for the whole
+     * The next instance name in this population's sequence — {@code unit_group-1} then
+     * {@code unit_group-2}. Ordinals are never reused, so a name identifies one agent for the whole
      * run even after that agent has left.
      */
     public String mintName() {
