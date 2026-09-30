@@ -26,6 +26,9 @@ val bundledRepastUtilJars = listOf(
     // AbstractContext.iterator() chains subcontext iterators through this; required the
     // moment anything touches a Context, which for this library is immediately.
     "collections-generic-4.01.jar",
+    // Repast's Network projections are JUNG graphs underneath.
+    "jung-api-2.0.1.jar",
+    "jung-graph-impl-2.0.1.jar",
 )
 
 dependencies {

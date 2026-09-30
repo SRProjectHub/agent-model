@@ -122,6 +122,11 @@ fetch_nested_jar "repast.simphony.runtime" "lib/saf.core.runtime.jar" "saf.core.
 # Context at all needs this. The sibling libraries never vendored it because their Blocks are
 # deliberately not Repast agents and never enter a Context; agent-model is the first to.
 fetch_nested_jar "repast.simphony.core" "lib/collections-generic-4.01.jar" "collections-generic-4.01.jar"
+# Repast's Network projections are JUNG graphs underneath: ContextJungNetwork holds an
+# edu.uci.ics.jung.graph.Graph, and the directed/undirected implementations instantiate JUNG's
+# sparse graph classes. Needed as soon as anything declares a relation between agents.
+fetch_nested_jar "repast.simphony.core" "lib/jung-api-2.0.1.jar" "jung-api-2.0.1.jar"
+fetch_nested_jar "repast.simphony.core" "lib/jung-graph-impl-2.0.1.jar" "jung-graph-impl-2.0.1.jar"
 
 echo
 echo "Summary:"
