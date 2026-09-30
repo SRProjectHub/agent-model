@@ -3,6 +3,7 @@ package agentmodel;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static agentmodel.ScheduleTestSupport.advanceTo;
 import static agentmodel.ScheduleTestSupport.drive;
 
 import java.util.ArrayList;
@@ -302,6 +303,29 @@ class MediatorTest {
                 assertThrows(IllegalStateException.class, () -> drive(schedule, 0.0));
         assertTrue(thrown.getMessage().contains("send cycle"), thrown.getMessage());
         assertTrue(thrown.getMessage().contains("dependsOn"), thrown.getMessage());
+    }
+
+    @Test
+    void sendingFromOutsideAnyExecutingActionNeedsDeliverPending() {
+        // Pinning a Repast behaviour rather than a choice of ours: an action scheduled for the tick
+        // the clock has already reached is filed with the currently-executing group, and the next
+        // execute() clears that group first — so with nothing executing, an armed drain is discarded
+        // and the message would never arrive. Worth a test because the failure is silent.
+        World w = new World();
+        Unit from = w.unit("u-1");
+        Unit to = w.unit("u-2");
+        w.dependsOn.connect(from, to);
+        w.logging(to);
+
+        advanceTo(w.schedule, 4.0); // clock is now genuinely at 4.0, and nothing is executing
+        w.dependsOn.send(from, to, "m");
+        drive(w.schedule, 4.0);
+
+        assertTrue(w.log.isEmpty(), "the armed drain was discarded, exactly as Repast does");
+        assertEquals(1, w.mediator.pending(), "and the message is still waiting, not lost");
+
+        w.mediator.deliverPending();
+        assertEquals(Arrays.asList("u-2<-u-1:m@4.0"), w.log);
     }
 
     @Test

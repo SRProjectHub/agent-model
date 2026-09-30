@@ -21,6 +21,14 @@ import repast.simphony.engine.schedule.ScheduleParameters;
  * already waiting. A cycle that never settles would otherwise hang the run, so there is a cap on how
  * many deliveries one instant may make; exceeding it fails loudly and names the last pair involved.
  *
+ * <p><b>One Repast behaviour to know about.</b> An action scheduled for the tick the clock has
+ * already reached is silently discarded unless another action is currently executing — it is filed
+ * with the executing group, and the next {@code execute()} clears that group before running anything.
+ * So arming a drain works from inside any scheduled action, which is where sends normally happen: a
+ * Block event, an agent's own step, a handler. It does <em>not</em> work from outside one, with the
+ * clock already advanced, and the message would simply never arrive. {@link #deliverPending} is the
+ * way to send from there, and says so at the call site rather than failing quietly.
+ *
  * <p>One mediator serves a whole run. Relations are declared through it rather than built
  * independently, because a relation is a channel and a channel with no way to deliver is half a
  * thing — so there is one queue and one ordering for all agent traffic, not one per relation.
@@ -73,6 +81,21 @@ public final class Mediator {
     /** How many messages are waiting, which outside a drain is how many were sent this instant. */
     public int pending() {
         return queue.size();
+    }
+
+    /**
+     * Delivers everything waiting, now, on the caller's own stack rather than from a scheduled event.
+     *
+     * <p>For sending from outside any executing action — setting a scenario up after the clock has
+     * moved, or driving a run by hand — where an armed drain would be discarded and the message lost.
+     * Inside a scheduled action this is unnecessary and the wrong thing to reach for: it delivers
+     * within the sender's event instead of after it, which is the distinction the mediator exists to
+     * make.
+     */
+    public void deliverPending() {
+        if (!draining) {
+            drain();
+        }
     }
 
     <M> void enqueue(AgentNetwork<M> over, Agent sender, Agent receiver, M message) {
