@@ -2,6 +2,8 @@ package agentmodel;
 
 import processmodel.foundation.ProcessStage;
 import processmodel.foundation.ResourcePool;
+import processmodel.foundation.flow.FlowNode;
+import processmodel.foundation.flow.FlowPort;
 
 /**
  * Receives what an agent's held Blocks emit, with the holding agent named in every callback.
@@ -13,10 +15,10 @@ import processmodel.foundation.ResourcePool;
  *
  * <p>Every method is a no-op default, so an implementation states only what it cares about.
  *
- * <p>The surface covers discrete Blocks and resources. Continuous nodes emit a different and much
- * larger set of events ({@code FlowListener} has six methods of its own), and re-firing those is
- * deferred until {@code flow-model} is actually in this build — designing that surface without a
- * consumer to check it against is how it ends up wrong.
+ * <p>Covers both paradigms, which is the point: an agent may hold discrete Blocks and continuous
+ * nodes at once, and one registration here sees everything either kind emits. The continuous half
+ * mirrors {@code FlowListener} faithfully rather than curating it — attribution is this layer's job,
+ * deciding which events matter is the model's.
  */
 public interface AgentListener {
 
@@ -42,5 +44,28 @@ public interface AgentListener {
 
     default void resourceReleased(
             Agent agent, ResourcePool pool, Object holder, int units, double tick) {
+    }
+
+    /** The amount held in one of this agent's continuous nodes changed. */
+    default void levelChanged(Agent agent, FlowNode<?> node, double level, double tick) {
+    }
+
+    /** The rate through one of this agent's ports changed. */
+    default void rateChanged(Agent agent, FlowPort<?> port, double rate, double tick) {
+    }
+
+    default void nodeFull(Agent agent, FlowNode<?> node, double tick) {
+    }
+
+    default void nodeEmpty(Agent agent, FlowNode<?> node, double tick) {
+    }
+
+    /** A port of this agent's had nothing arriving where something was wanted. */
+    default void portStarved(Agent agent, FlowPort<?> port, double tick) {
+    }
+
+    /** The solver corrected a conservation error at one of this agent's nodes. */
+    default void conservationCorrected(
+            Agent agent, FlowNode<?> node, double relativeError, double tick) {
     }
 }

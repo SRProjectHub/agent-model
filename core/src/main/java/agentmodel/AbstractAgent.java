@@ -14,6 +14,9 @@ import java.util.function.DoubleSupplier;
 import processmodel.foundation.ProcessListener;
 import processmodel.foundation.ProcessStage;
 import processmodel.foundation.ResourcePool;
+import processmodel.foundation.flow.FlowListener;
+import processmodel.foundation.flow.FlowNode;
+import processmodel.foundation.flow.FlowPort;
 
 /**
  * The plumbing every agent needs: what it holds, who is watching, and a clock that is safe to read.
@@ -42,6 +45,7 @@ public abstract class AbstractAgent implements Agent {
     // Identity-keyed: two Blocks are never "equal", and a model may well hold several that would
     // compare equal by value. The value is how to unregister the listener installed for that Block.
     private final Map<ProcessStage<?>, Runnable> heldStages = new IdentityHashMap<>();
+    private final Map<FlowNode<?>, Runnable> heldNodes = new IdentityHashMap<>();
 
     // Insertion-ordered so iteration is reproducible; keyed by the type the capability was held
     // as, which is what makes view() a typed question rather than a string lookup.
@@ -62,7 +66,7 @@ public abstract class AbstractAgent implements Agent {
     // equal fields — the same reason ResourcePool keys its holders by identity. IdentityHashMap has
     // no defined iteration order though, so the order agents were contained in is kept alongside it;
     // otherwise contained() would hand back a different order on every JVM run.
-    private final Map<AbstractAgent, Containment> containments = new IdentityHashMap<>();
+    private final Map<AbstractAgent, AgentContext> containments = new IdentityHashMap<>();
     private final List<AbstractAgent> containedInOrder = new ArrayList<>();
 
     // Keyed by name because names are what mint instance names, so two populations sharing one
@@ -73,17 +77,6 @@ public abstract class AbstractAgent implements Agent {
     // ProcessVisit, which is the only thing that knows a chain exists.
     private volatile ProcessStage<?> currentBlock;
     private volatile double enteredCurrentBlockAt;
-
-    /** What one containment installed, so releasing it can undo exactly that. */
-    private static final class Containment {
-        final AgentListener forwarder;
-        final AgentContext where;
-
-        Containment(AgentListener forwarder, AgentContext where) {
-            this.forwarder = forwarder;
-            this.where = where;
-        }
-    }
 
     /** Takes the concrete class's simple name as the type name, for a one-of-a-kind agent. */
     protected AbstractAgent(String name, DoubleSupplier tickSource) {
@@ -125,6 +118,24 @@ public abstract class AbstractAgent implements Agent {
     }
 
     // -- listeners -------------------------------------------------------------------------
+
+    /**
+     * Runs {@code action} for every listener that should hear about this agent: its own, then those of
+     * each container above it.
+     *
+     * <p>Walking the chain at the moment of firing, rather than having each container register a
+     * forwarding listener on its children, is deliberate. A forwarder has to relay every callback the
+     * interface declares, so adding one to {@link AgentListener} silently stopped it reaching
+     * containers — which is exactly what happened when the continuous events were added. There is
+     * nothing to keep in step this way.
+     */
+    private void forEachListener(java.util.function.Consumer<AgentListener> action) {
+        for (AbstractAgent above = this; above != null; above = above.container) {
+            for (AgentListener listener : above.listeners) {
+                action.accept(listener);
+            }
+        }
+    }
 
     @Override
     public final void addAgentListener(AgentListener listener) {
@@ -201,8 +212,9 @@ public abstract class AbstractAgent implements Agent {
      * reference with observation attached; containing an agent is structural — exclusive, mutual,
      * and the thing that defines where an agent lives.
      *
-     * <p>Forwarded events keep their <em>original</em> attribution: a listener high in the tree is
-     * told which agent's Block emitted, not merely that something beneath it did.
+     * <p>Events from anything the child holds reach this agent's listeners too, keeping their
+     * <em>original</em> attribution: a listener high in the tree is told which agent's Block emitted,
+     * not merely that something beneath it did.
      *
      * @throws IllegalStateException if the child is already contained, or if containing it would
      *     make a cycle
@@ -245,39 +257,7 @@ public abstract class AbstractAgent implements Agent {
         child.container = this;
         child.homeContext = where;
 
-        AgentListener forwarder = new AgentListener() {
-            @Override
-            public void entityEntered(Agent agent, ProcessStage<?> stage, Object entity, double tick) {
-                for (AgentListener listener : listeners) {
-                    listener.entityEntered(agent, stage, entity, tick);
-                }
-            }
-
-            @Override
-            public void entityExited(Agent agent, ProcessStage<?> stage, Object entity, double tick) {
-                for (AgentListener listener : listeners) {
-                    listener.entityExited(agent, stage, entity, tick);
-                }
-            }
-
-            @Override
-            public void resourceAcquired(
-                    Agent agent, ResourcePool pool, Object holder, int units, double tick) {
-                for (AgentListener listener : listeners) {
-                    listener.resourceAcquired(agent, pool, holder, units, tick);
-                }
-            }
-
-            @Override
-            public void resourceReleased(
-                    Agent agent, ResourcePool pool, Object holder, int units, double tick) {
-                for (AgentListener listener : listeners) {
-                    listener.resourceReleased(agent, pool, holder, units, tick);
-                }
-            }
-        };
-        child.addAgentListener(forwarder);
-        containments.put(child, new Containment(forwarder, where));
+        containments.put(child, where);
         containedInOrder.add(child);
     }
 
@@ -288,15 +268,14 @@ public abstract class AbstractAgent implements Agent {
      * @throws IllegalStateException if this agent does not contain that child
      */
     public final void release(AbstractAgent child) {
-        Containment containment = containments.remove(child);
-        if (containment == null) {
+        AgentContext where = containments.remove(child);
+        if (where == null) {
             throw new IllegalStateException(name + " does not contain " + child.getName());
         }
-        child.removeAgentListener(containment.forwarder);
         if (child.subContext != null) {
-            containment.where.removeSubContext(child.subContext);
+            where.removeSubContext(child.subContext);
         }
-        containment.where.remove(child);
+        where.remove(child);
         removeIdentical(containedInOrder, child);
         child.container = null;
         child.homeContext = null;
@@ -495,34 +474,90 @@ public abstract class AbstractAgent implements Agent {
         final ProcessListener<T> adapter = new ProcessListener<T>() {
             @Override
             public void entityEnteredStage(T entity, ProcessStage<T> source, double tick) {
-                for (AgentListener listener : listeners) {
-                    listener.entityEntered(AbstractAgent.this, source, entity, tick);
-                }
+                forEachListener(l -> l.entityEntered(AbstractAgent.this, source, entity, tick));
             }
 
             @Override
             public void entityExitedStage(T entity, ProcessStage<T> source, double tick) {
-                for (AgentListener listener : listeners) {
-                    listener.entityExited(AbstractAgent.this, source, entity, tick);
-                }
+                forEachListener(l -> l.entityExited(AbstractAgent.this, source, entity, tick));
             }
 
             @Override
             public void resourceAcquired(ResourcePool pool, Object holder, int units, double tick) {
-                for (AgentListener listener : listeners) {
-                    listener.resourceAcquired(AbstractAgent.this, pool, holder, units, tick);
-                }
+                forEachListener(l -> l.resourceAcquired(AbstractAgent.this, pool, holder, units, tick));
             }
 
             @Override
             public void resourceReleased(ResourcePool pool, Object holder, int units, double tick) {
-                for (AgentListener listener : listeners) {
-                    listener.resourceReleased(AbstractAgent.this, pool, holder, units, tick);
-                }
+                forEachListener(l -> l.resourceReleased(AbstractAgent.this, pool, holder, units, tick));
             }
         };
         stage.addProcessListener(adapter);
         heldStages.put(stage, () -> stage.removeProcessListener(adapter));
+    }
+
+    /**
+     * Holds a continuous node, so what it emits reaches this agent's listeners attributed to this
+     * agent — the same arrangement as a discrete Block, through the listener supertype the two
+     * paradigms share.
+     *
+     * @throws IllegalStateException if this agent already holds that node
+     */
+    public final void hold(final FlowNode<?> node) {
+        if (node == null) {
+            throw new IllegalArgumentException("cannot hold a null node");
+        }
+        if (heldNodes.containsKey(node)) {
+            throw new IllegalStateException(name + " already holds node " + node.getName());
+        }
+        final FlowListener adapter = new FlowListener() {
+            @Override
+            public void levelChanged(FlowNode<?> source, double level, double tick) {
+                forEachListener(l -> l.levelChanged(AbstractAgent.this, source, level, tick));
+            }
+
+            @Override
+            public void rateChanged(FlowPort<?> port, double rate, double tick) {
+                forEachListener(l -> l.rateChanged(AbstractAgent.this, port, rate, tick));
+            }
+
+            @Override
+            public void nodeFull(FlowNode<?> source, double tick) {
+                forEachListener(l -> l.nodeFull(AbstractAgent.this, source, tick));
+            }
+
+            @Override
+            public void nodeEmpty(FlowNode<?> source, double tick) {
+                forEachListener(l -> l.nodeEmpty(AbstractAgent.this, source, tick));
+            }
+
+            @Override
+            public void portStarved(FlowPort<?> port, double tick) {
+                forEachListener(l -> l.portStarved(AbstractAgent.this, port, tick));
+            }
+
+            @Override
+            public void conservationCorrected(FlowNode<?> source, double relativeError, double tick) {
+                forEachListener(l -> l.conservationCorrected(AbstractAgent.this, source, relativeError, tick));
+            }
+
+            @Override
+            public void resourceAcquired(ResourcePool pool, Object holder, int units, double tick) {
+                forEachListener(l -> l.resourceAcquired(AbstractAgent.this, pool, holder, units, tick));
+            }
+
+            @Override
+            public void resourceReleased(ResourcePool pool, Object holder, int units, double tick) {
+                forEachListener(l -> l.resourceReleased(AbstractAgent.this, pool, holder, units, tick));
+            }
+        };
+        node.addFlowListener(adapter);
+        heldNodes.put(node, () -> node.removeFlowListener(adapter));
+    }
+
+    /** The continuous nodes this agent holds, in no particular order. */
+    public final Collection<FlowNode<?>> heldNodes() {
+        return Collections.unmodifiableCollection(heldNodes.keySet());
     }
 
     /** The Blocks this agent holds, in no particular order. */
@@ -542,6 +577,10 @@ public abstract class AbstractAgent implements Agent {
             detach.run();
         }
         heldStages.clear();
+        for (Runnable detach : heldNodes.values()) {
+            detach.run();
+        }
+        heldNodes.clear();
     }
 
     @Override

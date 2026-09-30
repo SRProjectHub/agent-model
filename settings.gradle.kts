@@ -10,4 +10,9 @@ rootProject.name = "agent-model"
 // this at it or set -Dprocess.model.dir=... rather than copying the sources.
 includeBuild(providers.systemProperty("process.model.dir").getOrElse("../process-model"))
 
+// flow-model arrives the same way, and only the integration tests need it: proving that one agent can
+// hold a discrete Block while another holds a continuous node means holding real ones of each. Note
+// process-model is then reachable by two routes, since flow-model includes it too.
+includeBuild(providers.systemProperty("flow.model.dir").getOrElse("../flow-model"))
+
 include("core", "integration-test", "examples")

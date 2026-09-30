@@ -2,9 +2,9 @@
 // `core` as well as this repo's, since proving that an agent genuinely holds Blocks means holding
 // real ones — an Activity with a Buffer, not a stub.
 //
-// flow-model is deliberately absent for now. The plan's integration scenario wants one facility
-// holding a continuous node too, which would mean a second includeBuild and process-model
-// arriving through two paths at once; that is worth doing carefully rather than as scaffolding.
+// Depends on both sibling libraries, because the scenario worth proving is heterogeneous: one agent
+// holding a discrete Block and another holding a continuous node, observed through the one listener
+// supertype they share.
 repositories {
     flatDir { dirs(rootProject.file("vendor")) }
 }
@@ -29,6 +29,7 @@ val bundledRepastUtilJars = listOf(
 dependencies {
     testImplementation(project(":core"))
     testImplementation("io.github.srprojecthub.processmodel:core:1.0.0")
+    testImplementation("io.github.srprojecthub.flowmodel:core:0.1.0")
 
     // Unlike core's own unit tests, these drive a full run, so Repast is a real dependency.
     testImplementation(files(rootProject.file("vendor/repast.simphony.core-2.11.0.jar")))
