@@ -189,6 +189,14 @@ public final class Population<A extends Agent> implements Iterable<A> {
         return Optional.empty();
     }
 
+    /**
+     * Polls every member for a capability, keeping those that hold it. Sugar for
+     * {@link Inspection#over} across {@link #members()}, which is the common case.
+     */
+    public <C> List<Inspection<C>> inspect(Class<C> capability) {
+        return Inspection.over(members(), capability);
+    }
+
     public void addPopulationListener(PopulationListener<A> listener) {
         listeners.add(listener);
     }

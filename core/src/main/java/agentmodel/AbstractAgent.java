@@ -57,7 +57,12 @@ public abstract class AbstractAgent implements Agent {
     // right place rather than always at the container's top level.
     private AgentContext homeContext;
 
+    // Identity-keyed, because two agents are never "equal" and a model is free to give two of them
+    // equal fields — the same reason ResourcePool keys its holders by identity. IdentityHashMap has
+    // no defined iteration order though, so the order agents were contained in is kept alongside it;
+    // otherwise contained() would hand back a different order on every JVM run.
     private final Map<AbstractAgent, Containment> containments = new IdentityHashMap<>();
+    private final List<AbstractAgent> containedInOrder = new ArrayList<>();
 
     // Keyed by name because names are what mint instance names, so two populations sharing one
     // would hand out colliding identities.
@@ -237,6 +242,7 @@ public abstract class AbstractAgent implements Agent {
         };
         child.addAgentListener(forwarder);
         containments.put(child, new Containment(forwarder, where));
+        containedInOrder.add(child);
     }
 
     /**
@@ -255,8 +261,19 @@ public abstract class AbstractAgent implements Agent {
             containment.where.removeSubContext(child.subContext);
         }
         containment.where.remove(child);
+        removeIdentical(containedInOrder, child);
         child.container = null;
         child.homeContext = null;
+    }
+
+    /** List.remove would use equals; containment is identity throughout. */
+    private static void removeIdentical(List<AbstractAgent> from, AbstractAgent agent) {
+        for (int i = 0; i < from.size(); i++) {
+            if (from.get(i) == agent) {
+                from.remove(i);
+                return;
+            }
+        }
     }
 
     /**
@@ -309,7 +326,7 @@ public abstract class AbstractAgent implements Agent {
 
     @Override
     public final Collection<Agent> contained() {
-        return Collections.unmodifiableCollection(new ArrayList<Agent>(containments.keySet()));
+        return Collections.unmodifiableCollection(new ArrayList<Agent>(containedInOrder));
     }
 
     /**

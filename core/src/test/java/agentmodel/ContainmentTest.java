@@ -235,6 +235,27 @@ class ContainmentTest {
     }
 
     @Test
+    void containedComesBackInTheOrderAgentsWereContained() {
+        // Not incidental. The backing map is identity-keyed and so has no iteration order of its own,
+        // which meant this handed back a different order on every JVM run until the order was kept
+        // explicitly — the same class of nondeterminism the Block libraries had at one instant.
+        Group group = new Group("group");
+        List<Agent> expected = new ArrayList<>();
+        for (int i = 1; i <= 6; i++) {
+            Unit unit = new Unit("u-" + i);
+            group.contain(unit);
+            expected.add(unit);
+        }
+
+        assertEquals(expected, new ArrayList<>(group.contained()));
+
+        // And a removal from the middle leaves the rest in order.
+        group.release((AbstractAgent) expected.get(2));
+        expected.remove(2);
+        assertEquals(expected, new ArrayList<>(group.contained()));
+    }
+
+    @Test
     void containedIsASnapshotAndNotAWayToRestructureTheTree() {
         Group group = new Group("group");
         group.contain(new Unit("unit"));
