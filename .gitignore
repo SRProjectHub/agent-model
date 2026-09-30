@@ -1,0 +1,7 @@
+.gradle/
+build/
+*/build/
+vendor/*.jar
+!vendor/README.md
+.DS_Store
+.idea/
