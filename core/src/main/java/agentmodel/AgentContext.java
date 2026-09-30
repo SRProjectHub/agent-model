@@ -22,6 +22,7 @@ public final class AgentContext extends DefaultContext<Object> {
     private static final AtomicLong SEQUENCE = new AtomicLong();
 
     private final Agent owner;
+    private Population<?> population;
 
     AgentContext(Agent owner) {
         this(owner, owner.getName());
@@ -37,6 +38,15 @@ public final class AgentContext extends DefaultContext<Object> {
         // readability while the sequence keeps it unique.
         super(label + "#" + SEQUENCE.incrementAndGet());
         this.owner = owner;
+    }
+
+    /** The population this context serves, when it is a population's rather than an agent's own. */
+    Population<?> population() {
+        return population;
+    }
+
+    void population(Population<?> population) {
+        this.population = population;
     }
 
     /**

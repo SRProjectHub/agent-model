@@ -40,6 +40,7 @@ public final class Population<A extends Agent> implements Iterable<A> {
         this.name = name;
         this.type = type;
         this.context = new AgentContext(container, name);
+        this.context.population(this);
         container.subContext().addSubContext(context);
     }
 
@@ -88,6 +89,43 @@ public final class Population<A extends Agent> implements Iterable<A> {
         container.containIn((AbstractAgent) agent, context);
         for (PopulationListener<A> listener : listeners) {
             listener.joined(this, agent);
+        }
+    }
+
+    /**
+     * Takes an agent that already belongs somewhere else, keeping its relations across the move.
+     *
+     * <p>The population it came from is notified that it left, and this one that it joined, so a
+     * transfer reads as one event on each side rather than a removal nobody reported.
+     *
+     * @throws IllegalStateException if the agent is not contained anywhere to begin with
+     */
+    public void transfer(A agent) {
+        if (!(agent instanceof AbstractAgent)) {
+            throw new IllegalArgumentException(
+                    "a population holds AbstractAgent instances; " + agent.getClass() + " is not one");
+        }
+        AbstractAgent moving = (AbstractAgent) agent;
+        Population<?> from = moving.homeContext() == null ? null : moving.homeContext().population();
+
+        container.transferInto(moving, context);
+
+        if (from != null && from != this) {
+            from.notifyLeft(agent);
+        }
+        for (PopulationListener<A> listener : listeners) {
+            listener.joined(this, agent);
+        }
+    }
+
+    /**
+     * Tells this population's listeners that an agent left, when the departure was driven from
+     * elsewhere. Unchecked internally because the agent came out of this population to begin with.
+     */
+    @SuppressWarnings("unchecked")
+    void notifyLeft(Agent agent) {
+        for (PopulationListener listener : listeners) {
+            listener.left(this, agent);
         }
     }
 

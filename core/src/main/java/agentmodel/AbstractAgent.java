@@ -170,6 +170,11 @@ public abstract class AbstractAgent implements Agent {
         containIn(child, subContext());
     }
 
+    /** The containing agent, or null at the top — the concrete type, for package-internal walks. */
+    final AbstractAgent containerAgent() {
+        return container;
+    }
+
     /** The context this agent lives in, or null while it is uncontained. */
     final AgentContext homeContext() {
         return homeContext;
@@ -252,6 +257,49 @@ public abstract class AbstractAgent implements Agent {
         containment.where.remove(child);
         child.container = null;
         child.homeContext = null;
+    }
+
+    /**
+     * Moves an already-contained agent into this one, keeping its relations.
+     *
+     * <p>Distinct from {@link #release} followed by {@link #contain}, and that distinction is the
+     * whole point: changing an agent's container takes it out of a Repast context, which drops it
+     * from every relation declared on that context or above it. For a departure that is right. For a
+     * transfer — a plant changing hands, a facility reassigned — arriving with no relations at all
+     * would be wrong, so they are saved across the move and put back.
+     *
+     * @throws IllegalStateException if the agent is not contained anywhere to begin with
+     */
+    public final void transfer(AbstractAgent agent) {
+        transferInto(agent, subContext());
+    }
+
+    /** Transfer placing the agent in a specific context — how a population takes a member. */
+    final void transferInto(AbstractAgent agent, AgentContext destination) {
+        if (agent == null) {
+            throw new IllegalArgumentException("cannot transfer null");
+        }
+        if (agent.container == null) {
+            throw new IllegalStateException(
+                    agent.getName() + " is not contained anywhere, so there is nothing to transfer");
+        }
+        if (agent.homeContext == destination) {
+            return;
+        }
+        // Everything containIn would refuse is checked here, before anything is touched. Releasing
+        // first and discovering the problem afterwards left the agent contained nowhere, with its
+        // relations already dropped and no longer saved — a refused transfer has to be a no-op.
+        if (agent == this) {
+            throw new IllegalStateException(name + " cannot transfer itself into itself");
+        }
+        if (this.isBelow(agent)) {
+            throw new IllegalStateException(
+                    "transferring " + agent.getName() + " into " + name + " would make a cycle");
+        }
+        List<Relations.SavedEdge> relations = Relations.save(agent);
+        agent.container.release(agent);
+        containIn(agent, destination);
+        Relations.restore(relations);
     }
 
     @Override
