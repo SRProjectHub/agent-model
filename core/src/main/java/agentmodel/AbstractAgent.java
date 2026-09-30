@@ -8,6 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalDouble;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.DoubleSupplier;
 import processmodel.foundation.ProcessListener;
@@ -67,6 +68,11 @@ public abstract class AbstractAgent implements Agent {
     // Keyed by name because names are what mint instance names, so two populations sharing one
     // would hand out colliding identities.
     private final Map<String, Population<?>> populations = new LinkedHashMap<>();
+
+    // Where this agent currently is, if it is travelling through a chain of Blocks. Maintained by
+    // ProcessVisit, which is the only thing that knows a chain exists.
+    private volatile ProcessStage<?> currentBlock;
+    private volatile double enteredCurrentBlockAt;
 
     /** What one containment installed, so releasing it can undo exactly that. */
     private static final class Containment {
@@ -128,6 +134,36 @@ public abstract class AbstractAgent implements Agent {
     @Override
     public final void removeAgentListener(AgentListener listener) {
         listeners.remove(listener);
+    }
+
+    // -- passing through Blocks ------------------------------------------------------------
+
+    /**
+     * The Block currently holding this agent, while it is travelling through a chain. Empty when it is
+     * not travelling, and also in the moment between leaving one Block and being admitted to the
+     * next — which is a real state when the next is full, and is why
+     * {@link ProcessVisit#isInProcess} answers a different question.
+     */
+    public final Optional<ProcessStage<?>> currentBlock() {
+        return Optional.<ProcessStage<?>>ofNullable(currentBlock);
+    }
+
+    /** When this agent entered the Block it is in, so time spent there can be read off. */
+    public final OptionalDouble enteredCurrentBlockAt() {
+        return currentBlock == null ? OptionalDouble.empty() : OptionalDouble.of(enteredCurrentBlockAt);
+    }
+
+    void enteredBlock(ProcessStage<?> stage, double tick) {
+        this.currentBlock = stage;
+        this.enteredCurrentBlockAt = tick;
+    }
+
+    void leftBlock(ProcessStage<?> stage) {
+        // Only clear if it is the Block we think we are in: the exit stage passes null to clear
+        // unconditionally, and a stale exited event from somewhere else should not move us.
+        if (stage == null || currentBlock == stage) {
+            this.currentBlock = null;
+        }
     }
 
     // -- containment -----------------------------------------------------------------------
