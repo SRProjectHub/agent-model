@@ -42,11 +42,15 @@ class AgentNetworkTest {
 
     // -- declaration -----------------------------------------------------------------------
 
+    private static Mediator mediator() {
+        return new Mediator(new repast.simphony.engine.schedule.Schedule());
+    }
+
     @Test
     void aRelationFixesItsDirectionCardinalityAndMessageTypeWhenDeclared() {
         Group group = new Group("group");
         AgentNetwork<Notice> dependsOn = AgentNetwork.declare(
-                group.subContext(), "dependsOn", Direction.DIRECTED, Cardinality.MANY, Notice.class);
+                mediator(),                 group.subContext(), "dependsOn", Direction.DIRECTED, Cardinality.MANY, Notice.class);
 
         assertEquals("dependsOn", dependsOn.getName());
         assertEquals(Direction.DIRECTED, dependsOn.direction());
@@ -58,11 +62,11 @@ class AgentNetworkTest {
     void declarationRefusesMissingPieces() {
         Group group = new Group("group");
         assertThrows(IllegalArgumentException.class, () -> AgentNetwork.declare(
-                null, "dependsOn", Direction.DIRECTED, Cardinality.MANY, Notice.class));
+                mediator(),                 null, "dependsOn", Direction.DIRECTED, Cardinality.MANY, Notice.class));
         assertThrows(IllegalArgumentException.class, () -> AgentNetwork.declare(
-                group.subContext(), "", Direction.DIRECTED, Cardinality.MANY, Notice.class));
+                mediator(),                 group.subContext(), "", Direction.DIRECTED, Cardinality.MANY, Notice.class));
         assertThrows(IllegalArgumentException.class, () -> AgentNetwork.declare(
-                group.subContext(), "dependsOn", Direction.DIRECTED, Cardinality.MANY, null));
+                mediator(),                 group.subContext(), "dependsOn", Direction.DIRECTED, Cardinality.MANY, null));
     }
 
     // -- several independent relations over the same agents ---------------------------------
@@ -80,9 +84,9 @@ class AgentNetworkTest {
         units.add(second);
 
         AgentNetwork<Notice> dependsOn = AgentNetwork.declare(
-                group.subContext(), "dependsOn", Direction.DIRECTED, Cardinality.MANY, Notice.class);
+                mediator(),                 group.subContext(), "dependsOn", Direction.DIRECTED, Cardinality.MANY, Notice.class);
         AgentNetwork<String> regulates = AgentNetwork.declare(
-                group.subContext(), "regulates", Direction.DIRECTED, Cardinality.MANY, String.class);
+                mediator(),                 group.subContext(), "regulates", Direction.DIRECTED, Cardinality.MANY, String.class);
 
         dependsOn.connect(first, second);
 
@@ -105,7 +109,7 @@ class AgentNetworkTest {
         Population<Unit> units = unitsRef[0];
 
         AgentNetwork<String> dependsOn = AgentNetwork.declare(
-                group.subContext(), "dependsOn", Direction.DIRECTED, Cardinality.MANY, String.class);
+                mediator(),                 group.subContext(), "dependsOn", Direction.DIRECTED, Cardinality.MANY, String.class);
 
         // Added to the population's nested context *after* the relation was declared.
         Unit a = new Unit("alpha", units.mintName());
@@ -128,7 +132,7 @@ class AgentNetworkTest {
         group.contain(downstream);
 
         AgentNetwork<String> dependsOn = AgentNetwork.declare(
-                group.subContext(), "dependsOn", Direction.DIRECTED, Cardinality.MANY, String.class);
+                mediator(),                 group.subContext(), "dependsOn", Direction.DIRECTED, Cardinality.MANY, String.class);
         dependsOn.connect(upstream, downstream);
 
         assertTrue(dependsOn.isConnected(upstream, downstream));
@@ -148,7 +152,7 @@ class AgentNetworkTest {
         group.contain(two);
 
         AgentNetwork<String> pairedWith = AgentNetwork.declare(
-                group.subContext(), "pairedWith", Direction.UNDIRECTED, Cardinality.MANY, String.class);
+                mediator(),                 group.subContext(), "pairedWith", Direction.UNDIRECTED, Cardinality.MANY, String.class);
         pairedWith.connect(one, two);
 
         assertTrue(pairedWith.isConnected(one, two));
@@ -170,7 +174,7 @@ class AgentNetworkTest {
         group.contain(second);
 
         AgentNetwork<String> assignedTo = AgentNetwork.declare(
-                group.subContext(), "assignedTo", Direction.DIRECTED, Cardinality.ONE, String.class);
+                mediator(),                 group.subContext(), "assignedTo", Direction.DIRECTED, Cardinality.ONE, String.class);
         assignedTo.connect(unit, first);
 
         IllegalStateException thrown =
@@ -190,7 +194,7 @@ class AgentNetworkTest {
         group.contain(second);
 
         AgentNetwork<String> assignedTo = AgentNetwork.declare(
-                group.subContext(), "assignedTo", Direction.DIRECTED, Cardinality.ONE, String.class);
+                mediator(),                 group.subContext(), "assignedTo", Direction.DIRECTED, Cardinality.ONE, String.class);
         assignedTo.connect(unit, first);
         assertTrue(assignedTo.disconnect(unit, first));
         assignedTo.connect(unit, second);
@@ -204,7 +208,7 @@ class AgentNetworkTest {
         Unit unit = new Unit("alpha", "p-1");
         group.contain(unit);
         AgentNetwork<String> dependsOn = AgentNetwork.declare(
-                group.subContext(), "dependsOn", Direction.DIRECTED, Cardinality.MANY, String.class);
+                mediator(),                 group.subContext(), "dependsOn", Direction.DIRECTED, Cardinality.MANY, String.class);
 
         assertThrows(IllegalStateException.class, () -> dependsOn.sole(unit));
     }
@@ -219,7 +223,7 @@ class AgentNetworkTest {
         group.contain(one);
         group.contain(two);
         AgentNetwork<String> dependsOn = AgentNetwork.declare(
-                group.subContext(), "dependsOn", Direction.DIRECTED, Cardinality.MANY, String.class);
+                mediator(),                 group.subContext(), "dependsOn", Direction.DIRECTED, Cardinality.MANY, String.class);
 
         assertThrows(IllegalStateException.class, () -> dependsOn.connect(one, one));
         dependsOn.connect(one, two);
@@ -234,7 +238,7 @@ class AgentNetworkTest {
         group.contain(one);
         group.contain(two);
         AgentNetwork<String> dependsOn = AgentNetwork.declare(
-                group.subContext(), "dependsOn", Direction.DIRECTED, Cardinality.MANY, String.class);
+                mediator(),                 group.subContext(), "dependsOn", Direction.DIRECTED, Cardinality.MANY, String.class);
 
         assertFalse(dependsOn.disconnect(one, two));
         dependsOn.connect(one, two);
@@ -252,7 +256,7 @@ class AgentNetworkTest {
             group.contain(f);
         }
         AgentNetwork<String> dependsOn = AgentNetwork.declare(
-                group.subContext(), "dependsOn", Direction.DIRECTED, Cardinality.MANY, String.class);
+                mediator(),                 group.subContext(), "dependsOn", Direction.DIRECTED, Cardinality.MANY, String.class);
         dependsOn.connect(up, middle);
         dependsOn.connect(middle, down);
 
@@ -273,7 +277,7 @@ class AgentNetworkTest {
             group.contain(f);
         }
         AgentNetwork<String> dependsOn = AgentNetwork.declare(
-                group.subContext(), "dependsOn", Direction.DIRECTED, Cardinality.MANY, String.class);
+                mediator(),                 group.subContext(), "dependsOn", Direction.DIRECTED, Cardinality.MANY, String.class);
         dependsOn.connect(hub, keep);
         dependsOn.connect(hub, drop);
 
@@ -296,7 +300,7 @@ class AgentNetworkTest {
         units.add(leaving);
 
         AgentNetwork<String> dependsOn = AgentNetwork.declare(
-                group.subContext(), "dependsOn", Direction.DIRECTED, Cardinality.MANY, String.class);
+                mediator(),                 group.subContext(), "dependsOn", Direction.DIRECTED, Cardinality.MANY, String.class);
         dependsOn.connect(staying, leaving);
         assertTrue(dependsOn.isConnected(staying, leaving));
 
@@ -324,7 +328,7 @@ class AgentNetworkTest {
         top.contain(counterpart);
 
         AgentNetwork<String> dependsOn = AgentNetwork.declare(
-                top.subContext(), "dependsOn", Direction.DIRECTED, Cardinality.MANY, String.class);
+                mediator(),                 top.subContext(), "dependsOn", Direction.DIRECTED, Cardinality.MANY, String.class);
         dependsOn.connect(unit, counterpart);
         assertTrue(dependsOn.isConnected(unit, counterpart));
 

@@ -53,6 +53,10 @@ class InspectionTest {
 
     // -- polling many at once --------------------------------------------------------------
 
+    private static Mediator mediator() {
+        return new Mediator(new repast.simphony.engine.schedule.Schedule());
+    }
+
     @Test
     void pollingKeepsOnlyTheAgentsThatHoldTheCapability() {
         Group group = new Group("group");
@@ -94,7 +98,7 @@ class InspectionTest {
             spokes.add(u);
         }
         AgentNetwork<String> dependsOn = AgentNetwork.declare(
-                group.subContext(), "dependsOn", Direction.DIRECTED, Cardinality.MANY, String.class);
+                mediator(),                 group.subContext(), "dependsOn", Direction.DIRECTED, Cardinality.MANY, String.class);
 
         // Connect out of natural name order, so insertion order and name order differ.
         for (int index : new int[] {3, 1, 4, 0, 2}) {
@@ -192,7 +196,7 @@ class InspectionTest {
         group.contain(cannotAnswer);
 
         AgentNetwork<String> dependsOn = AgentNetwork.declare(
-                group.subContext(), "dependsOn", Direction.DIRECTED, Cardinality.MANY, String.class);
+                mediator(),                 group.subContext(), "dependsOn", Direction.DIRECTED, Cardinality.MANY, String.class);
         for (Unit candidate : candidates) {
             dependsOn.connect(coordinator, candidate);
         }

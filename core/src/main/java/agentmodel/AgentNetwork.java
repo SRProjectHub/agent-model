@@ -2,7 +2,9 @@ package agentmodel;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.Predicate;
 import repast.simphony.context.Context;
@@ -40,13 +42,20 @@ public final class AgentNetwork<M> {
     private final Cardinality cardinality;
     private final Class<M> messageType;
     private final Network<Object> network;
+    private final Mediator mediator;
+
+    // Identity-keyed for the same reason containment is: agents are never equal, and a model may
+    // give two of them equal fields.
+    private final Map<Agent, MessageHandler<M>> handlers = new IdentityHashMap<>();
 
     private AgentNetwork(
+            Mediator mediator,
             String name,
             Direction direction,
             Cardinality cardinality,
             Class<M> messageType,
             Network<Object> network) {
+        this.mediator = mediator;
         this.name = name;
         this.direction = direction;
         this.cardinality = cardinality;
@@ -63,11 +72,15 @@ public final class AgentNetwork<M> {
      * them.
      */
     public static <M> AgentNetwork<M> declare(
+            Mediator mediator,
             Context<Object> over,
             String name,
             Direction direction,
             Cardinality cardinality,
             Class<M> messageType) {
+        if (mediator == null) {
+            throw new IllegalArgumentException("a relation needs a mediator to carry its messages");
+        }
         if (over == null) {
             throw new IllegalArgumentException("a relation needs a context to span");
         }
@@ -83,7 +96,7 @@ public final class AgentNetwork<M> {
                         : new UndirectedJungNetwork<Object>(name),
                 over);
         over.addProjection(underlying);
-        return new AgentNetwork<>(name, direction, cardinality, messageType, underlying);
+        return new AgentNetwork<>(mediator, name, direction, cardinality, messageType, underlying);
     }
 
     public String getName() {
@@ -98,9 +111,63 @@ public final class AgentNetwork<M> {
         return cardinality;
     }
 
-    /** The type of message this relation carries, once delivery exists. */
+    /** The type of message this relation carries. */
     public Class<M> messageType() {
         return messageType;
+    }
+
+    // -- carrying messages -----------------------------------------------------------------
+
+    /**
+     * Sets what {@code receiver} does with messages arriving over this relation, replacing any
+     * previous handler. An agent with no handler is a valid target; its messages are dropped, which
+     * is what lets a relation exist for structure alone.
+     */
+    public void onReceive(Agent receiver, MessageHandler<M> handler) {
+        if (receiver == null) {
+            throw new IllegalArgumentException("a receiver is required");
+        }
+        if (handler == null) {
+            handlers.remove(receiver);
+        } else {
+            handlers.put(receiver, handler);
+        }
+    }
+
+    MessageHandler<M> handlerFor(Agent receiver) {
+        return handlers.get(receiver);
+    }
+
+    /**
+     * Sends along an existing connection. Delivery happens at this same instant, in the
+     * {@link AgentPriority#INTERACTION} band, after the event that sent it — never inside it.
+     *
+     * @throws IllegalStateException if the two are not connected over this relation, since a message
+     *     travelling where no relation exists would make the relation decorative
+     */
+    public void send(Agent from, Agent to, M message) {
+        require(from, "from");
+        require(to, "to");
+        if (!isConnected(from, to)) {
+            throw new IllegalStateException(
+                    name + ": " + from.getName() + " is not connected to " + to.getName()
+                            + ", so there is no channel to send along");
+        }
+        mediator.enqueue(this, from, to, message);
+    }
+
+    /**
+     * Sends to everything this agent reaches over this relation, in connection order. Reports how
+     * many were sent, which is zero for an agent with no connections rather than an error.
+     */
+    public int sendToConnected(Agent from, M message) {
+        require(from, "from");
+        int sent = 0;
+        for (Agent to : connectedFrom(from)) {
+            mediator.enqueue(this, from, to, message);
+            sent++;
+        }
+        return sent;
     }
 
     // -- connecting ------------------------------------------------------------------------

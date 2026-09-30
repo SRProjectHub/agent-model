@@ -31,6 +31,10 @@ class TransferTest {
         }
     }
 
+    private static Mediator mediator() {
+        return new Mediator(new repast.simphony.engine.schedule.Schedule());
+    }
+
     @Test
     void aTransferredAgentKeepsItsRelationsWhereReleaseAndContainWouldHaveLostThem() {
         Group top = new Group("top");
@@ -45,7 +49,7 @@ class TransferTest {
         top.contain(counterpart);
 
         AgentNetwork<String> dependsOn = AgentNetwork.declare(
-                top.subContext(), "dependsOn", Direction.DIRECTED, Cardinality.MANY, String.class);
+                mediator(),                 top.subContext(), "dependsOn", Direction.DIRECTED, Cardinality.MANY, String.class);
         dependsOn.connect(unit, counterpart);
 
         destination.transfer(unit);
@@ -73,9 +77,9 @@ class TransferTest {
         }
 
         AgentNetwork<String> dependsOn = AgentNetwork.declare(
-                top.subContext(), "dependsOn", Direction.DIRECTED, Cardinality.MANY, String.class);
+                mediator(),                 top.subContext(), "dependsOn", Direction.DIRECTED, Cardinality.MANY, String.class);
         AgentNetwork<String> pairedWith = AgentNetwork.declare(
-                top.subContext(), "pairedWith", Direction.UNDIRECTED, Cardinality.MANY, String.class);
+                mediator(),                 top.subContext(), "pairedWith", Direction.UNDIRECTED, Cardinality.MANY, String.class);
 
         dependsOn.connect(upstream, unit);   // incoming
         dependsOn.connect(unit, downstream); // outgoing
@@ -224,7 +228,7 @@ class TransferTest {
         top.contain(gone);
 
         AgentNetwork<String> dependsOn = AgentNetwork.declare(
-                top.subContext(), "dependsOn", Direction.DIRECTED, Cardinality.MANY, String.class);
+                mediator(),                 top.subContext(), "dependsOn", Direction.DIRECTED, Cardinality.MANY, String.class);
         dependsOn.connect(unit, gone);
 
         top.release(gone); // the counterparty leaves entirely
