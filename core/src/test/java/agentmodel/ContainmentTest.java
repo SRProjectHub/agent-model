@@ -19,7 +19,7 @@ import processmodel.foundation.ProcessStage;
  */
 class ContainmentTest {
 
-    // Distinct types, so ancestor lookup by Java class is actually being exercised.
+    // Distinct types, so container lookup by Java class is actually being exercised.
     static final class Government extends AbstractAgent {
         Government(String name) {
             super(name, () -> 0.0);
@@ -56,7 +56,7 @@ class ContainmentTest {
         owner.contain(facility);
 
         assertSame(owner, facility.container().get());
-        assertEquals(Arrays.asList((Agent) facility), new ArrayList<>(owner.children()));
+        assertEquals(Arrays.asList((Agent) facility), new ArrayList<>(owner.contained()));
         assertTrue(owner.subContext().contains(facility));
         assertSame(owner, owner.subContext().owner(), "the context knows whose it is");
     }
@@ -153,7 +153,7 @@ class ContainmentTest {
     }
 
     @Test
-    void containingAnAncestorOrItselfIsRefusedRatherThanMakingACycle() {
+    void containingOneOfItsOwnContainersOrItselfIsRefusedRatherThanMakingACycle() {
         Government gov = new Government("gov");
         Owner owner = new Owner("owner");
         gov.contain(owner);
@@ -176,7 +176,7 @@ class ContainmentTest {
         owner.release(facility);
 
         assertFalse(facility.container().isPresent());
-        assertTrue(owner.children().isEmpty());
+        assertTrue(owner.contained().isEmpty());
         assertFalse(owner.subContext().contains(facility));
 
         queue.emitEntered("after-release", 2.0);
@@ -196,7 +196,7 @@ class ContainmentTest {
     // -- traversal -------------------------------------------------------------------------
 
     @Test
-    void ancestorLookupIsByJavaTypeAndCountsFromTheClosest() {
+    void containerLookupIsByJavaTypeAndCountsFromTheClosest() {
         Government gov = new Government("gov");
         Owner outer = new Owner("outer");
         Owner inner = new Owner("inner");
@@ -205,19 +205,19 @@ class ContainmentTest {
         outer.contain(inner);
         inner.contain(facility);
 
-        assertSame(inner, facility.ancestorOfType(Owner.class, 1).get());
-        assertSame(outer, facility.ancestorOfType(Owner.class, 2).get());
-        assertSame(outer, facility.ancestorOfType(Owner.class, -1).get(), "-1 is the most distant");
-        assertSame(gov, facility.ancestorOfType(Government.class, 1).get());
+        assertSame(inner, facility.findContainerOfType(Owner.class, 1).get());
+        assertSame(outer, facility.findContainerOfType(Owner.class, 2).get());
+        assertSame(outer, facility.findContainerOfType(Owner.class, -1).get(), "-1 is the most distant");
+        assertSame(gov, facility.findContainerOfType(Government.class, 1).get());
 
-        assertFalse(facility.ancestorOfType(Owner.class, 3).isPresent());
-        assertFalse(gov.ancestorOfType(Owner.class, 1).isPresent());
+        assertFalse(facility.findContainerOfType(Owner.class, 3).isPresent());
+        assertFalse(gov.findContainerOfType(Owner.class, 1).isPresent());
 
-        assertEquals(Arrays.asList(inner, outer), facility.ancestorsOfType(Owner.class));
+        assertEquals(Arrays.asList(inner, outer), facility.findContainersOfType(Owner.class));
     }
 
     @Test
-    void familyTreeQuestionsAnswerInBothDirections() {
+    void containmentQuestionsAnswerInBothDirections() {
         Government gov = new Government("gov");
         Owner owner = new Owner("owner");
         Facility facility = new Facility("facility");
@@ -225,21 +225,19 @@ class ContainmentTest {
         gov.contain(owner);
         owner.contain(facility);
 
-        assertTrue(gov.ancestorOf(facility));
-        assertTrue(facility.descendantOf(gov));
-        assertFalse(facility.ancestorOf(gov));
-        assertFalse(gov.descendantOf(facility));
+        assertTrue(gov.isAbove(facility));
+        assertTrue(facility.isBelow(gov));
+        assertFalse(facility.isAbove(gov));
+        assertFalse(gov.isBelow(facility));
 
-        assertTrue(gov.inFamilyTree(facility));
-        assertTrue(facility.inFamilyTree(gov));
-        assertTrue(facility.inFamilyTree(facility));
-        assertFalse(facility.inFamilyTree(unrelated));
+        assertFalse(facility.isBelow(unrelated), "an unrelated agent is neither above nor below");
+        assertFalse(facility.isAbove(unrelated));
     }
 
     @Test
-    void childrenIsASnapshotAndNotAWayToRestructureTheTree() {
+    void containedIsASnapshotAndNotAWayToRestructureTheTree() {
         Owner owner = new Owner("owner");
         owner.contain(new Facility("facility"));
-        assertThrows(UnsupportedOperationException.class, () -> owner.children().clear());
+        assertThrows(UnsupportedOperationException.class, () -> owner.contained().clear());
     }
 }

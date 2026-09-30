@@ -21,7 +21,18 @@ import java.util.Optional;
  */
 public interface Agent {
 
+    /**
+     * This agent's instance name, unique within the population that minted it and formed from that
+     * population's name plus an ordinal — {@code sfr_fleet-1}.
+     */
     String getName();
+
+    /**
+     * The name of the kind of agent this is — {@code "SFR"} — as distinct from its Java class and
+     * from its instance name. Several types commonly share one class, so the class alone does not
+     * identify what a model means by a type.
+     */
+    String typeName();
 
     /**
      * The agent containing this one, empty at the top of a hierarchy. Containment is exclusive, so
@@ -30,7 +41,7 @@ public interface Agent {
     Optional<Agent> container();
 
     /** The agents this one directly contains, not recursing further down. */
-    Collection<Agent> children();
+    Collection<Agent> contained();
 
     /**
      * Looks up a capability this agent holds, keyed by the type it was held as. Empty when the

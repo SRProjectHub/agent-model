@@ -19,20 +19,20 @@ import processmodel.foundation.ResourcePool;
  *
  * <p>Holding is the central act. An agent holds <b>Blocks</b>, whose events it re-fires to its own
  * listeners with itself named as the source, and <b>capability objects</b>, which are how an agent
- * says what it can do. Capabilities are held rather than implemented because Java permits one
- * superclass: Cyclus can write {@code Facility : TimeListener, Agent, Trader} and we cannot, and
- * its own toolkit shows the better answer anyway — its buy and sell policies are separate objects
- * an agent owns, several at a time, not interfaces it implements.
+ * says what it can do. Capabilities are held rather than implemented because Java permits a single
+ * superclass, so an agent cannot inherit one interface per role — and holding is the better answer
+ * regardless: an agent can hold several capabilities of different kinds, swap one at runtime, and
+ * keep the implementing class private behind the type it is published under.
  *
  * <p>Registration lifetime is this class's responsibility, not the model's. Every listener it
  * installs on a held Block is remembered alongside a way to remove it, and {@link #detachHeld}
- * undoes all of them at once. Cyclus leaves this to the caller and documents the consequence —
- * <i>"When a policy's managing agent is deallocated, you MUST either call the policy's Stop
- * function or delete the policy. Otherwise SEGFAULT."</i> A stale registration here would not
- * crash, it would quietly keep reporting events for an agent that has left, which is worse.
+ * undoes all of them at once. Leaving that to the caller invites the failure it is meant to
+ * prevent: a stale registration would not crash, it would quietly keep reporting events for an
+ * agent that has already left, which is harder to notice and harder to trace.
  */
 public abstract class AbstractAgent implements Agent {
 
+    private final String typeName;
     private final String name;
     private final DoubleSupplier tickSource;
 
@@ -46,20 +46,50 @@ public abstract class AbstractAgent implements Agent {
     // as, which is what makes view() a typed question rather than a string lookup.
     private final Map<Class<?>, Object> capabilities = new LinkedHashMap<>();
 
-    // Containment. The subcontext is authoritative for children and is created lazily, so the
+    // Containment. The subcontext is authoritative for contained agents and is created lazily, so
     // numerous leaf agents never allocate one. `container` is a cached inverse maintained only by
     // contain/release, in the manner of a doubly-linked list rather than a second structure.
     private AgentContext subContext;
     private volatile AbstractAgent container;
-    private final Map<AbstractAgent, AgentListener> childForwarders = new IdentityHashMap<>();
 
+    // The context this agent actually lives in once contained — its container's own context, or a
+    // population's context nested inside it. Kept so a subcontext created later attaches in the
+    // right place rather than always at the container's top level.
+    private AgentContext homeContext;
+
+    private final Map<AbstractAgent, Containment> containments = new IdentityHashMap<>();
+
+    // Keyed by name because names are what mint instance names, so two populations sharing one
+    // would hand out colliding identities.
+    private final Map<String, Population<?>> populations = new LinkedHashMap<>();
+
+    /** What one containment installed, so releasing it can undo exactly that. */
+    private static final class Containment {
+        final AgentListener forwarder;
+        final AgentContext where;
+
+        Containment(AgentListener forwarder, AgentContext where) {
+            this.forwarder = forwarder;
+            this.where = where;
+        }
+    }
+
+    /** Takes the concrete class's simple name as the type name, for a one-of-a-kind agent. */
     protected AbstractAgent(String name, DoubleSupplier tickSource) {
+        this(null, name, tickSource);
+    }
+
+    protected AbstractAgent(String typeName, String name, DoubleSupplier tickSource) {
         if (name == null || name.isEmpty()) {
             throw new IllegalArgumentException("an agent needs a name");
         }
         if (tickSource == null) {
             throw new IllegalArgumentException("an agent needs a tick source");
         }
+        if (typeName != null && typeName.isEmpty()) {
+            throw new IllegalArgumentException("a type name may be omitted but not blank");
+        }
+        this.typeName = typeName == null ? getClass().getSimpleName() : typeName;
         this.name = name;
         this.tickSource = tickSource;
     }
@@ -67,6 +97,11 @@ public abstract class AbstractAgent implements Agent {
     @Override
     public final String getName() {
         return name;
+    }
+
+    @Override
+    public final String typeName() {
+        return typeName;
     }
 
     /**
@@ -93,7 +128,7 @@ public abstract class AbstractAgent implements Agent {
     // -- containment -----------------------------------------------------------------------
 
     /**
-     * The Repast context holding this agent's children, created on first use. A leaf agent never
+     * The Repast context holding the agents this one contains, created on first use. A leaf never
      * allocates one, which matters because leaves are the numerous kind.
      *
      * <p>Exposed so a model can attach the top of its hierarchy into its own root context, and so
@@ -102,10 +137,11 @@ public abstract class AbstractAgent implements Agent {
     public final AgentContext subContext() {
         if (subContext == null) {
             subContext = new AgentContext(this);
-            // If this agent is already contained, its context belongs under its container's, so
-            // membership stays transitive however late the context comes into existence.
-            if (container != null) {
-                container.subContext().addSubContext(subContext);
+            // If this agent is already contained, its own context belongs under whichever context
+            // it lives in, so membership stays transitive however late the context comes into
+            // existence — and a population member nests under that population, not beside it.
+            if (homeContext != null) {
+                homeContext.addSubContext(subContext);
             }
         }
         return subContext;
@@ -131,6 +167,16 @@ public abstract class AbstractAgent implements Agent {
      *     make a cycle
      */
     public final void contain(AbstractAgent child) {
+        containIn(child, subContext());
+    }
+
+    /** The context this agent lives in, or null while it is uncontained. */
+    final AgentContext homeContext() {
+        return homeContext;
+    }
+
+    /** Containment placing the child in a specific context — how a population holds its members. */
+    final void containIn(AbstractAgent child, AgentContext where) {
         if (child == null) {
             throw new IllegalArgumentException("cannot contain null");
         }
@@ -141,16 +187,17 @@ public abstract class AbstractAgent implements Agent {
             throw new IllegalStateException(
                     child.getName() + " is already contained by " + child.container.getName());
         }
-        if (this.descendantOf(child)) {
+        if (this.isBelow(child)) {
             throw new IllegalStateException(
                     "containing " + child.getName() + " in " + name + " would make a cycle");
         }
 
-        subContext().add(child);
+        where.add(child);
         if (child.subContext != null) {
-            subContext().addSubContext(child.subContext);
+            where.addSubContext(child.subContext);
         }
         child.container = this;
+        child.homeContext = where;
 
         AgentListener forwarder = new AgentListener() {
             @Override
@@ -184,7 +231,7 @@ public abstract class AbstractAgent implements Agent {
             }
         };
         child.addAgentListener(forwarder);
-        childForwarders.put(child, forwarder);
+        containments.put(child, new Containment(forwarder, where));
     }
 
     /**
@@ -194,16 +241,17 @@ public abstract class AbstractAgent implements Agent {
      * @throws IllegalStateException if this agent does not contain that child
      */
     public final void release(AbstractAgent child) {
-        AgentListener forwarder = childForwarders.remove(child);
-        if (forwarder == null) {
+        Containment containment = containments.remove(child);
+        if (containment == null) {
             throw new IllegalStateException(name + " does not contain " + child.getName());
         }
-        child.removeAgentListener(forwarder);
+        child.removeAgentListener(containment.forwarder);
         if (child.subContext != null) {
-            subContext().removeSubContext(child.subContext);
+            containment.where.removeSubContext(child.subContext);
         }
-        subContext().remove(child);
+        containment.where.remove(child);
         child.container = null;
+        child.homeContext = null;
     }
 
     @Override
@@ -212,33 +260,59 @@ public abstract class AbstractAgent implements Agent {
     }
 
     @Override
-    public final Collection<Agent> children() {
-        return Collections.unmodifiableCollection(new ArrayList<Agent>(childForwarders.keySet()));
+    public final Collection<Agent> contained() {
+        return Collections.unmodifiableCollection(new ArrayList<Agent>(containments.keySet()));
+    }
+
+    /**
+     * Opens a named, typed population held by this agent, with its own nested context.
+     *
+     * @throws IllegalStateException if this agent already has a population of that name
+     */
+    public final <A extends Agent> Population<A> population(String populationName, Class<A> type) {
+        if (populationName == null || populationName.isEmpty()) {
+            throw new IllegalArgumentException("a population needs a name");
+        }
+        if (type == null) {
+            throw new IllegalArgumentException("a population needs a member type");
+        }
+        if (populations.containsKey(populationName)) {
+            throw new IllegalStateException(
+                    name + " already has a population named " + populationName);
+        }
+        Population<A> population = new Population<>(this, populationName, type);
+        populations.put(populationName, population);
+        return population;
+    }
+
+    /** The populations this agent has opened, keyed by name. */
+    public final Map<String, Population<?>> populations() {
+        return Collections.unmodifiableMap(populations);
     }
 
     // -- traversal -------------------------------------------------------------------------
 
     /**
-     * The {@code layer}-th ancestor of the given type, counting from the closest, or the most
-     * distant when {@code layer} is -1. Typed by Java class, where Cyclus has to match a
-     * {@code kind_} string because C++ gave it no better option.
+     * The {@code depth}-th container of the given type, counting from the closest, or the most
+     * distant when {@code depth} is -1. Typed by Java class rather than by a type-name string, so
+     * a mistyped lookup is a compile error instead of an empty result at runtime.
      */
-    public final <A extends Agent> Optional<A> ancestorOfType(Class<A> type, int layer) {
-        List<A> found = ancestorsOfType(type);
+    public final <A extends Agent> Optional<A> findContainerOfType(Class<A> type, int depth) {
+        List<A> found = findContainersOfType(type);
         if (found.isEmpty()) {
             return Optional.empty();
         }
-        if (layer == -1) {
+        if (depth == -1) {
             return Optional.of(found.get(found.size() - 1));
         }
-        if (layer < 1 || layer > found.size()) {
+        if (depth < 1 || depth > found.size()) {
             return Optional.empty();
         }
-        return Optional.of(found.get(layer - 1));
+        return Optional.of(found.get(depth - 1));
     }
 
-    /** Every ancestor of the given type, ordered closest first. */
-    public final <A extends Agent> List<A> ancestorsOfType(Class<A> type) {
+    /** Every container of the given type above this agent, ordered closest first. */
+    public final <A extends Agent> List<A> findContainersOfType(Class<A> type) {
         List<A> found = new ArrayList<>();
         for (AbstractAgent above = container; above != null; above = above.container) {
             if (type.isInstance(above)) {
@@ -249,7 +323,7 @@ public abstract class AbstractAgent implements Agent {
     }
 
     /** Whether this agent is somewhere above {@code other} in the containment tree. */
-    public final boolean ancestorOf(Agent other) {
+    public final boolean isAbove(Agent other) {
         if (!(other instanceof AbstractAgent)) {
             return false;
         }
@@ -262,18 +336,13 @@ public abstract class AbstractAgent implements Agent {
     }
 
     /** Whether this agent is somewhere below {@code other} in the containment tree. */
-    public final boolean descendantOf(Agent other) {
+    public final boolean isBelow(Agent other) {
         for (AbstractAgent above = container; above != null; above = above.container) {
             if (above == other) {
                 return true;
             }
         }
         return false;
-    }
-
-    /** Whether the two agents share a containment tree at all, in either direction. */
-    public final boolean inFamilyTree(Agent other) {
-        return this == other || ancestorOf(other) || descendantOf(other);
     }
 
     // -- capabilities ----------------------------------------------------------------------
