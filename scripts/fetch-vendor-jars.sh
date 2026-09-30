@@ -117,6 +117,11 @@ fetch_nested_jar "repast.simphony.core" "lib/uom-lib-common-2.0.jar" "uom-lib-co
 # Require-Bundle: repast.simphony.runtime the core manifest declares turned out to be
 # load-bearing after all for this one class, confirmed by actually running a test.
 fetch_nested_jar "repast.simphony.runtime" "lib/saf.core.runtime.jar" "saf.core.runtime.jar"
+# repast.simphony.context.AbstractContext.iterator() chains its own and its subcontexts'
+# iterators with org.apache.commons.collections15.iterators.IteratorChain, so any use of a
+# Context at all needs this. The sibling libraries never vendored it because their Blocks are
+# deliberately not Repast agents and never enter a Context; agent-model is the first to.
+fetch_nested_jar "repast.simphony.core" "lib/collections-generic-4.01.jar" "collections-generic-4.01.jar"
 
 echo
 echo "Summary:"

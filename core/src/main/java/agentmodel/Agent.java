@@ -1,5 +1,6 @@
 package agentmodel;
 
+import java.util.Collection;
 import java.util.Optional;
 
 /**
@@ -21,6 +22,15 @@ import java.util.Optional;
 public interface Agent {
 
     String getName();
+
+    /**
+     * The agent containing this one, empty at the top of a hierarchy. Containment is exclusive, so
+     * there is at most one.
+     */
+    Optional<Agent> container();
+
+    /** The agents this one directly contains, not recursing further down. */
+    Collection<Agent> children();
 
     /**
      * Looks up a capability this agent holds, keyed by the type it was held as. Empty when the

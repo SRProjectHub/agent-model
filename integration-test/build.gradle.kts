@@ -18,6 +18,9 @@ val bundledRepastUtilJars = listOf(
     "unit-api-2.0.jar",
     "uom-lib-common-2.0.jar",
     "saf.core.runtime.jar",
+    // AbstractContext.iterator() chains subcontext iterators through this; required the
+    // moment anything touches a Context, which for this library is immediately.
+    "collections-generic-4.01.jar",
 )
 
 dependencies {
